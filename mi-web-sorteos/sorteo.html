@@ -1,0 +1,397 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Participar — Sorteio</title>
+    <link rel="stylesheet" href="assets/app.css">
+</head>
+<body>
+
+<div class="container" style="padding-top:20px;">
+    <a href="sorteos.html" class="back-link">← Voltar aos sorteios</a>
+
+    <div class="main-box">
+        <div id="sorteoHeader" style="text-align:center;margin-bottom:20px;">
+            <div id="sorteoImagenWrap" style="display:none;margin-bottom:14px;border-radius:12px;overflow:hidden;max-height:220px;">
+                <img id="sorteoImagen" src="" alt="" style="width:100%;max-height:220px;object-fit:cover;">
+            </div>
+            <h2 id="sorteoTitulo" style="color:var(--primary);">Carregando...</h2>
+            <p id="sorteoPremio" style="color:var(--text-muted);font-size:0.9rem;"></p>
+            <p id="sorteoPrecio" style="font-weight:bold;margin-top:8px;"></p>
+        </div>
+
+        <!-- COMPRA (cliente já cadastrado) -->
+        <div id="pantallaCotas" class="pantalla activa seccion">
+            <p id="clienteInfo" style="font-size:0.82rem;color:var(--text-muted);margin-bottom:12px;"></p>
+            <h3 style="color:var(--primary);margin-bottom:8px;">Escolha suas Cotas</h3>
+            <p style="font-size:0.85rem;color:var(--text-muted);margin-bottom:12px;">Selecione a quantidade — os números serão atribuídos automaticamente</p>
+
+            <div class="qty-grid" id="qtyGrid">
+                <button type="button" class="qty-btn" data-qty="1">+1<span class="sub">cota</span></button>
+                <button type="button" class="qty-btn" data-qty="5">+5<span class="sub">cotas</span></button>
+                <button type="button" class="qty-btn" data-qty="10">+10<span class="sub">cotas</span></button>
+                <button type="button" class="qty-btn" data-qty="20">+20<span class="sub">cotas</span></button>
+            </div>
+
+            <label>Quantidade personalizada</label>
+            <input type="number" id="qtyCustom" min="1" max="500" placeholder="Ex: 15">
+
+            <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;margin-top:12px;">
+                <p style="font-size:0.85rem;font-weight:bold;margin:0;">Seus números:</p>
+                <button type="button" class="btn btn-sm btn-secondary" id="btnLimparTodos" style="display:none;width:auto;margin:0;font-size:0.75rem;padding:6px 12px;">Limpar todos</button>
+            </div>
+            <div class="selected-nums" id="listaNumeros">
+                <span style="color:var(--text-muted);font-size:0.82rem;">Clique em uma quantidade acima</span>
+            </div>
+
+            <div class="toggle-manual">
+                <button type="button" id="btnToggleManual">Quero escolher números manualmente</button>
+            </div>
+            <div class="panel-manual" id="panelManual">
+                <div style="display:flex;gap:8px;margin-bottom:10px;">
+                    <input type="number" id="inputNum" min="1" placeholder="Número" style="margin:0;">
+                    <button type="button" class="btn btn-sm" id="btnAddNum" style="width:auto;margin:0;">Adicionar</button>
+                </div>
+                <div class="grid-numeros" id="contenedorGrid"></div>
+            </div>
+
+            <div class="resumo">
+                Total: <span style="color:var(--primary);">R$ <span id="textoTotal">0</span>,00</span>
+                (<span id="cantCotas">0</span> cotas)
+            </div>
+            <button type="button" class="btn btn-green" id="btnGerar">Gerar Pagamento PIX</button>
+            <button type="button" class="btn btn-secondary" id="btnVoltarReg">Voltar aos Sorteios</button>
+        </div>
+
+        <!-- 3. PIX -->
+        <div id="pantallaPago" class="pantalla seccion" style="text-align:center;">
+            <h3 style="color:var(--success);">⚡ PIX Gerado!</h3>
+            <div id="avisoDemo" class="aviso-demo" style="display:none;"></div>
+            <div id="statusPago" style="display:none;margin:12px 0;padding:14px;border-radius:8px;font-weight:bold;"></div>
+            <p id="aguardandoPago" style="display:none;font-size:0.85rem;color:var(--text-muted);margin:8px 0;">
+                ⏳ Aguardando confirmação do pagamento...
+            </p>
+            <p style="font-weight:bold;font-size:1.1rem;">R$ <span id="pixTotal">0</span>,00</p>
+            <p style="font-size:0.85rem;color:var(--text-muted);margin:8px 0;">Números reservados:</p>
+            <p id="pixNumeros" style="font-size:0.82rem;word-break:break-word;margin-bottom:16px;"></p>
+            <p style="font-size:0.85rem;text-align:left;font-weight:bold;">Código Pix Copia e Cola:</p>
+            <div class="copia-cola" id="textoPix"></div>
+            <button type="button" class="btn btn-green" id="btnCopiar">Copiar Código</button>
+            <button type="button" class="btn btn-secondary" id="btnInicio">Voltar aos Sorteios</button>
+        </div>
+    </div>
+</div>
+
+<script>
+    var STORAGE_KEY = "cdf_cliente";
+    var params = new URLSearchParams(location.search);
+    var sorteoId = params.get("id");
+    var sorteo = null;
+    var precioCota = 10;
+    var totalCotas = 10000;
+    var cotasSeleccionadas = [];
+    var cotasPagas = [];
+    var cotasProcessando = [];
+    var modoManual = false;
+    var qtySeleccionada = 0;
+    var datosCliente = {};
+    var codigoPix = "";
+    var pedidoIdAtual = "";
+    var pollPagoTimer = null;
+    var paginaGrid = 0;
+    var pageSize = 200;
+
+    try {
+        datosCliente = JSON.parse(sessionStorage.getItem(STORAGE_KEY)) || {};
+    } catch (e) {
+        datosCliente = {};
+    }
+
+    if (!datosCliente.nome || !datosCliente.cpf) {
+        location.replace("index.html");
+    } else {
+        document.getElementById("clienteInfo").textContent =
+            "Participante: " + datosCliente.nome + " · CPF: " + datosCliente.cpf;
+    }
+
+    if (!sorteoId) {
+        location.href = "sorteos.html";
+    }
+
+    function cambiarPantalla(id) {
+        document.querySelectorAll(".pantalla").forEach(function (p) { p.classList.remove("activa"); });
+        document.getElementById(id).classList.add("activa");
+    }
+
+    function estaOcupada(n) {
+        return cotasPagas.indexOf(n) !== -1 || cotasProcessando.indexOf(n) !== -1;
+    }
+
+    function removerNumero(n) {
+        var idx = cotasSeleccionadas.indexOf(n);
+        if (idx === -1) return;
+        cotasSeleccionadas.splice(idx, 1);
+        qtySeleccionada = 0;
+        document.querySelectorAll(".qty-btn").forEach(function (b) { b.classList.remove("active"); });
+        actualizarUI();
+        if (document.getElementById("panelManual").classList.contains("visible")) {
+            construirGrid();
+        }
+    }
+
+    function limparTodosNumeros() {
+        if (!cotasSeleccionadas.length) return;
+        cotasSeleccionadas = [];
+        qtySeleccionada = 0;
+        document.querySelectorAll(".qty-btn").forEach(function (b) { b.classList.remove("active"); });
+        document.getElementById("qtyCustom").value = "";
+        actualizarUI();
+        if (document.getElementById("panelManual").classList.contains("visible")) {
+            construirGrid();
+        }
+    }
+
+    function actualizarUI() {
+        var total = cotasSeleccionadas.length * precioCota;
+        document.getElementById("textoTotal").textContent = total;
+        document.getElementById("cantCotas").textContent = cotasSeleccionadas.length;
+        document.getElementById("btnLimparTodos").style.display = cotasSeleccionadas.length ? "inline-block" : "none";
+        var lista = document.getElementById("listaNumeros");
+        if (!cotasSeleccionadas.length) {
+            lista.innerHTML = '<span style="color:var(--text-muted);font-size:0.82rem;">Nenhum número selecionado</span>';
+        } else {
+            lista.innerHTML = cotasSeleccionadas.map(function (n) {
+                return '<span class="num-badge">' + n +
+                    '<button type="button" class="num-badge-remove" data-num="' + n + '" title="Remover ' + n + '" aria-label="Remover número ' + n + '">×</button></span>';
+            }).join("");
+            lista.querySelectorAll(".num-badge-remove").forEach(function (btn) {
+                btn.onclick = function (e) {
+                    e.stopPropagation();
+                    removerNumero(parseInt(btn.getAttribute("data-num"), 10));
+                };
+            });
+        }
+    }
+
+    function asignarAleatorios(qty) {
+        qtySeleccionada = qty;
+        document.querySelectorAll(".qty-btn").forEach(function (b) {
+            b.classList.toggle("active", parseInt(b.getAttribute("data-qty"), 10) === qty);
+        });
+        document.getElementById("qtyCustom").value = "";
+
+        var ocupados = {};
+        cotasPagas.concat(cotasProcessando).concat(cotasSeleccionadas).forEach(function (n) { ocupados[n] = true; });
+        var libres = [];
+        for (var i = 1; i <= totalCotas; i++) {
+            if (!ocupados[i]) libres.push(i);
+        }
+        if (libres.length < qty) {
+            alert("Só há " + libres.length + " cotas disponíveis.");
+            return;
+        }
+        for (var j = libres.length - 1; j > 0; j--) {
+            var k = Math.floor(Math.random() * (j + 1));
+            var tmp = libres[j]; libres[j] = libres[k]; libres[k] = tmp;
+        }
+        cotasSeleccionadas = libres.slice(0, qty).sort(function (a, b) { return a - b; });
+        modoManual = false;
+        actualizarUI();
+        if (document.getElementById("panelManual").classList.contains("visible")) {
+            construirGrid();
+        }
+    }
+
+    function construirGrid() {
+        var cont = document.getElementById("contenedorGrid");
+        cont.innerHTML = "";
+        var inicio = paginaGrid * pageSize + 1;
+        var fin = Math.min(inicio + pageSize - 1, totalCotas);
+        for (var i = inicio; i <= fin; i++) {
+            var d = document.createElement("div");
+            d.className = "cota";
+            d.textContent = i;
+            if (cotasPagas.indexOf(i) !== -1) d.classList.add("pago");
+            else if (cotasProcessando.indexOf(i) !== -1) d.classList.add("processando");
+            else if (cotasSeleccionadas.indexOf(i) !== -1) d.classList.add("selecionada");
+            (function (n) {
+                d.onclick = function () {
+                    if (estaOcupada(n)) return;
+                    var idx = cotasSeleccionadas.indexOf(n);
+                    if (idx === -1) cotasSeleccionadas.push(n);
+                    else cotasSeleccionadas.splice(idx, 1);
+                    cotasSeleccionadas.sort(function (a, b) { return a - b; });
+                    qtySeleccionada = 0;
+                    document.querySelectorAll(".qty-btn").forEach(function (b) { b.classList.remove("active"); });
+                    actualizarUI();
+                    construirGrid();
+                };
+            })(i);
+            cont.appendChild(d);
+        }
+    }
+
+    function cargarCotas() {
+        return fetch("api/cotas.php?sorteo_id=" + encodeURIComponent(sorteoId))
+            .then(function (r) { return r.json(); })
+            .then(function (d) {
+                cotasPagas = d.pagas || [];
+                cotasProcessando = d.processando || [];
+            })
+            .catch(function () { cotasPagas = []; cotasProcessando = []; });
+    }
+
+    function pararPollPago() {
+        if (pollPagoTimer) {
+            clearInterval(pollPagoTimer);
+            pollPagoTimer = null;
+        }
+    }
+
+    function iniciarPollPago() {
+        pararPollPago();
+        if (!pedidoIdAtual || !sorteoId) return;
+        document.getElementById("aguardandoPago").style.display = "block";
+        pollPagoTimer = setInterval(function () {
+            fetch("api/verificar-pago.php?sorteo_id=" + encodeURIComponent(sorteoId) + "&pedido_id=" + encodeURIComponent(pedidoIdAtual))
+                .then(function (r) { return r.json(); })
+                .then(function (d) {
+                    if (d.status === "approved" || d.estado === "pago") {
+                        pararPollPago();
+                        document.getElementById("aguardandoPago").style.display = "none";
+                        var st = document.getElementById("statusPago");
+                        st.style.display = "block";
+                        st.style.background = "#1a3a1a";
+                        st.style.color = "#2ae056";
+                        st.innerHTML = "✓ Pagamento confirmado! Suas cotas estão garantidas.";
+                    } else if (d.status === "cancelled" || d.status === "rejected") {
+                        pararPollPago();
+                        document.getElementById("aguardandoPago").textContent = "Pagamento cancelado ou recusado. Gere um novo PIX.";
+                    }
+                })
+                .catch(function () {});
+        }, 4000);
+    }
+
+    function gerarPix() {
+        if (!cotasSeleccionadas.length) {
+            alert("Selecione a quantidade de cotas.");
+            return;
+        }
+        var btn = document.getElementById("btnGerar");
+        btn.disabled = true;
+        btn.textContent = "GERANDO...";
+
+        var body = {
+            sorteo_id: sorteoId,
+            nome: datosCliente.nome,
+            cpf: datosCliente.cpf,
+            email: datosCliente.email,
+            whatsapp: datosCliente.whatsapp,
+            valor: cotasSeleccionadas.length * precioCota,
+            modo: modoManual ? "manual" : "aleatorio",
+            cantidad: cotasSeleccionadas.length,
+            numeros: cotasSeleccionadas
+        };
+
+        fetch("api/pix.php", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(body)
+        })
+        .then(function (r) { return r.text().then(function (t) {
+            try { return { ok: r.ok, data: JSON.parse(t) }; } catch (e) { return { ok: false, data: { message: "Resposta inválida" } }; }
+        }); })
+        .then(function (res) {
+            if (!res.ok) throw new Error(res.data.message || "Erro ao gerar PIX");
+            var code = res.data.point_of_interaction && res.data.point_of_interaction.transaction_data
+                ? res.data.point_of_interaction.transaction_data.qr_code : "";
+            if (!code) throw new Error("Código PIX não retornado");
+            if (res.data.numeros) cotasSeleccionadas = res.data.numeros;
+
+            pedidoIdAtual = res.data.pedido_id || res.data.external_reference || "";
+            codigoPix = code;
+            document.getElementById("pixTotal").textContent = Math.round(res.data.transaction_amount || (cotasSeleccionadas.length * precioCota));
+            document.getElementById("pixNumeros").textContent = cotasSeleccionadas.join(", ");
+            document.getElementById("textoPix").textContent = code;
+            document.getElementById("statusPago").style.display = "none";
+            document.getElementById("aguardandoPago").style.display = "none";
+            document.getElementById("aguardandoPago").textContent = "⏳ Aguardando confirmação do pagamento...";
+            var aviso = document.getElementById("avisoDemo");
+            if (res.data.demo) {
+                aviso.style.display = "block";
+                aviso.textContent = res.data.message + " Confirme em Admin → Pedidos.";
+            } else {
+                aviso.style.display = "none";
+                iniciarPollPago();
+            }
+            cambiarPantalla("pantallaPago");
+        })
+        .catch(function (e) { alert(e.message || "Falha na conexão"); })
+        .finally(function () {
+            btn.disabled = false;
+            btn.textContent = "Gerar Pagamento PIX";
+        });
+    }
+
+    fetch("api/sorteos.php?id=" + encodeURIComponent(sorteoId))
+        .then(function (r) { return r.json(); })
+        .then(function (s) {
+            if (s.error) { alert("Sorteio não encontrado"); location.href = "sorteos.html"; return; }
+            if (s.estado !== "activo") { alert("Este sorteio não está disponível"); location.href = "sorteos.html"; return; }
+            sorteo = s;
+            precioCota = s.precio_cota;
+            totalCotas = s.total_cotas;
+            document.getElementById("sorteoTitulo").textContent = s.titulo;
+            document.getElementById("sorteoPremio").textContent = "🏅 Prêmio: " + (s.premio || "");
+            var fechaTxt = s.fecha_sorteo ? " · Sorteio: " + s.fecha_sorteo.split("-").reverse().join("/") : " · Data a definir";
+            document.getElementById("sorteoPrecio").textContent = "R$ " + precioCota + ",00 por cota · " + totalCotas.toLocaleString("pt-BR") + " números" + fechaTxt;
+            if (s.imagen) {
+                document.getElementById("sorteoImagen").src = s.imagen;
+                document.getElementById("sorteoImagenWrap").style.display = "block";
+            }
+            document.title = s.titulo + " — Sorteio";
+            return cargarCotas();
+        })
+        .catch(function () { alert("Erro ao carregar sorteio"); });
+
+    document.querySelectorAll(".qty-btn").forEach(function (b) {
+        b.onclick = function () { asignarAleatorios(parseInt(b.getAttribute("data-qty"), 10)); };
+    });
+
+    document.getElementById("qtyCustom").onchange = function () {
+        var q = parseInt(this.value, 10);
+        if (q > 0) asignarAleatorios(q);
+    };
+
+    document.getElementById("btnToggleManual").onclick = function () {
+        var p = document.getElementById("panelManual");
+        p.classList.toggle("visible");
+        modoManual = p.classList.contains("visible");
+        if (modoManual) construirGrid();
+    };
+
+    document.getElementById("btnAddNum").onclick = function () {
+        var n = parseInt(document.getElementById("inputNum").value, 10);
+        if (isNaN(n) || n < 1 || n > totalCotas) { alert("Número inválido"); return; }
+        if (estaOcupada(n)) { alert("Número indisponível"); return; }
+        if (cotasSeleccionadas.indexOf(n) === -1) {
+            cotasSeleccionadas.push(n);
+            cotasSeleccionadas.sort(function (a, b) { return a - b; });
+            modoManual = true;
+            actualizarUI();
+            construirGrid();
+        }
+    };
+
+    document.getElementById("btnLimparTodos").onclick = limparTodosNumeros;
+    document.getElementById("btnGerar").onclick = gerarPix;
+    document.getElementById("btnVoltarReg").onclick = function () { location.href = "sorteos.html"; };
+    document.getElementById("btnCopiar").onclick = function () {
+        navigator.clipboard.writeText(codigoPix).then(function () { alert("Copiado!"); });
+    };
+    document.getElementById("btnInicio").onclick = function () { location.href = "sorteos.html"; };
+</script>
+</body>
+</html>

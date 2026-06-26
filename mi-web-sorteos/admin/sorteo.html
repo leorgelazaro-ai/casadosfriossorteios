@@ -1,0 +1,210 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Detalhe do Sorteio — Admin</title>
+    <link rel="stylesheet" href="../assets/app.css">
+    <style>
+        .admin-wrap { max-width: 1100px; margin: 0 auto; padding: 20px; }
+        .detail-header { display: flex; justify-content: space-between; align-items: flex-start; flex-wrap: wrap; gap: 12px; margin-bottom: 20px; }
+        .detail-img { width: 100%; max-width: 320px; border-radius: 12px; object-fit: cover; max-height: 200px; }
+        .stats-row { display: flex; flex-wrap: wrap; gap: 10px; margin: 16px 0; }
+        .stat-pill { background: #252525; border: 1px solid var(--gray-border); padding: 8px 14px; border-radius: 8px; font-size: 0.82rem; }
+        .ganador-result { background: linear-gradient(135deg,#2a2000,#1a1500); border:2px solid var(--gold); border-radius:12px; padding:20px; text-align:center; margin:20px 0; }
+        .ganador-result .num { font-size:2.5rem; font-weight:800; color:var(--gold); }
+        table { width:100%; border-collapse:collapse; font-size:0.82rem; }
+        th,td { padding:10px 8px; border-bottom:1px solid var(--gray-border); text-align:left; }
+        th { color:var(--text-muted); }
+        .nums-list { display:flex; flex-wrap:wrap; gap:4px; max-height:120px; overflow-y:auto; }
+        .num-mini { background:#333; padding:3px 8px; border-radius:4px; font-size:0.72rem; }
+    </style>
+</head>
+<body>
+<div class="admin-wrap">
+    <a href="index.html" class="back-link">← Voltar ao painel</a>
+
+    <div id="loading" class="main-box" style="text-align:center;padding:40px;">Carregando...</div>
+
+    <div id="content" style="display:none;">
+        <div class="detail-header main-box">
+            <div style="flex:1;min-width:240px;">
+                <div style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:12px;">
+                    <button type="button" class="btn btn-sm btn-secondary" id="btnEditarDet" style="width:auto;">Editar</button>
+                    <button type="button" class="btn btn-sm btn-danger" id="btnExcluirDet" style="width:auto;background:#c62828;">Excluir</button>
+                </div>
+                <h2 id="dTitulo" style="color:var(--primary);margin-bottom:8px;"></h2>
+                <p id="dPremio" style="color:var(--text-muted);margin-bottom:8px;"></p>
+                <p id="dMeta" style="font-size:0.85rem;"></p>
+                <div class="stats-row" id="dStats"></div>
+                <div id="sortearBox" style="margin-top:16px;display:none;">
+                    <label>Número ganhador manual (opcional — deixe vazio para sortear aleatório entre cotas pagas)</label>
+                    <input type="number" id="numManual" min="1" placeholder="Ex: 3847">
+                    <button type="button" class="btn" id="btnSortear" style="margin-top:10px;">🎲 Realizar Sorteio</button>
+                </div>
+            </div>
+            <img id="dImagen" class="detail-img" style="display:none;" alt="">
+        </div>
+
+        <div id="ganadorBox" class="ganador-result" style="display:none;">
+            <div style="color:var(--gold);font-weight:bold;">NÚMERO GANHADOR</div>
+            <div class="num" id="dGanador"></div>
+        </div>
+
+        <div class="main-box" style="margin-top:20px;">
+            <h3 style="margin-bottom:12px;">Histórico de Pedidos</h3>
+            <div id="tablaPedidos"></div>
+        </div>
+
+        <div class="main-box" style="margin-top:20px;">
+            <h3 style="margin-bottom:12px;">Números Pagos (<span id="countPagos">0</span>)</h3>
+            <div class="nums-list" id="listaPagos"></div>
+        </div>
+    </div>
+</div>
+
+<script>
+    var sorteoId = new URLSearchParams(location.search).get("id");
+    if (!sorteoId) location.href = "index.html";
+
+    function api(path, opts) {
+        opts = opts || {};
+        opts.credentials = "include";
+        return fetch("../api/admin/" + path, opts).then(function (r) {
+            return r.text().then(function (t) {
+                try { return JSON.parse(t); } catch (e) { return { error: t.substring(0, 120) }; }
+            });
+        });
+    }
+
+    function esc(t) { var d = document.createElement("div"); d.textContent = t || ""; return d.innerHTML; }
+    function formatDt(iso) {
+        if (!iso) return "";
+        var d = new Date(iso);
+        return d.toLocaleDateString("pt-BR") + " " + d.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
+    }
+
+    function renderDetalle(data) {
+        var s = data.sorteo;
+        document.getElementById("loading").style.display = "none";
+        document.getElementById("content").style.display = "block";
+        document.title = s.titulo + " — Admin";
+
+        document.getElementById("dTitulo").textContent = s.titulo;
+        document.getElementById("dPremio").textContent = "🏅 " + (s.premio || "");
+        document.getElementById("dMeta").textContent =
+            "Estado: " + s.estado + " · R$ " + s.precio_cota + "/cota · " +
+            (s.fecha_sorteo ? "Data: " + s.fecha_sorteo.split("-").reverse().join("/") : "Sem data definida");
+
+        document.getElementById("dStats").innerHTML =
+            '<span class="stat-pill">Vendidas: ' + (s.vendidas || 0) + '/' + s.total_cotas + '</span>' +
+            '<span class="stat-pill">' + (s.porcentaje || 0) + '% vendido</span>' +
+            '<span class="stat-pill">Processando: ' + (s.processando || 0) + '</span>';
+
+        if (s.imagen) {
+            document.getElementById("dImagen").src = "../" + s.imagen;
+            document.getElementById("dImagen").style.display = "block";
+        }
+
+        if (s.estado === "finalizado" && s.numero_ganador) {
+            document.getElementById("ganadorBox").style.display = "block";
+            document.getElementById("dGanador").textContent = s.numero_ganador;
+        } else if (s.estado === "activo") {
+            document.getElementById("sortearBox").style.display = "block";
+            if (location.hash === "#sortear") {
+                setTimeout(function () {
+                    document.getElementById("sortearBox").scrollIntoView({ behavior: "smooth" });
+                }, 300);
+            }
+        }
+
+        var pagos = data.numeros_pagos || [];
+        document.getElementById("countPagos").textContent = pagos.length;
+        document.getElementById("listaPagos").innerHTML = pagos.length
+            ? pagos.map(function (n) { return '<span class="num-mini">' + n + '</span>'; }).join("")
+            : '<span style="color:var(--text-muted);">Nenhuma cota paga ainda</span>';
+
+        var pedidos = data.pedidos || [];
+        if (!pedidos.length) {
+            document.getElementById("tablaPedidos").innerHTML = '<p style="color:var(--text-muted);">Nenhum pedido neste sorteio.</p>';
+        } else {
+            var html = '<table><thead><tr><th>Data</th><th>Cliente</th><th>Contato</th><th>Números</th><th>Valor</th><th>Estado</th><th>Ação</th></tr></thead><tbody>';
+            pedidos.forEach(function (p) {
+                html += '<tr><td>' + formatDt(p.created_at) + '</td>' +
+                    '<td><strong>' + esc(p.nome) + '</strong><br><small>CPF: ' + p.cpf + '</small></td>' +
+                    '<td><small>' + esc(p.email) + '<br>' + esc(p.whatsapp) + '</small></td>' +
+                    '<td>' + (p.numeros || []).join(", ") + '</td>' +
+                    '<td>R$ ' + p.valor + '</td>' +
+                    '<td>' + p.estado + '</td>' +
+                    '<td>' + (p.estado === "processando"
+                        ? '<button class="btn btn-sm btn-green" onclick="confirmarPedido(\'' + p.id + '\')">✓ Pago</button>'
+                        : "—") + '</td></tr>';
+            });
+            html += '</tbody></table>';
+            document.getElementById("tablaPedidos").innerHTML = html;
+        }
+    }
+
+    window.confirmarPedido = function (pid) {
+        if (!confirm("Confirmar pagamento?")) return;
+        api("pedidos.php", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ action: "confirmar", sorteo_id: sorteoId, pedido_id: pid })
+        }).then(function () { cargar(); });
+    };
+
+    function cargar() {
+        api("sorteo-detalle.php?id=" + encodeURIComponent(sorteoId)).then(function (data) {
+            if (data.error) {
+                document.getElementById("loading").innerHTML = '<p style="color:#ff6666;">' + data.error + '</p>';
+                return;
+            }
+            renderDetalle(data);
+        });
+    }
+
+    document.getElementById("btnSortear").onclick = function () {
+        var manual = parseInt(document.getElementById("numManual").value, 10);
+        var msg = manual ? "Confirmar sorteio com número " + manual + "?" : "Sortear aleatoriamente entre cotas pagas?";
+        if (!confirm(msg)) return;
+
+        api("sorteos.php", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+                action: "sortear",
+                id: sorteoId,
+                numero_ganador: manual > 0 ? manual : null
+            })
+        }).then(function (r) {
+            if (r.error) { alert(r.error); return; }
+            alert("Sorteio realizado! Número ganhador: " + r.numero_ganador);
+            cargar();
+        });
+    };
+
+    api("check.php").then(function (r) {
+        if (!r.logged_in) { location.href = "index.html"; return; }
+        cargar();
+    });
+
+    document.getElementById("btnEditarDet").onclick = function () {
+        location.href = "index.html?edit=" + encodeURIComponent(sorteoId);
+    };
+
+    document.getElementById("btnExcluirDet").onclick = function () {
+        if (!confirm("Excluir este sorteio? Sorteios com cotas pagas não podem ser excluídos.")) return;
+        api("sorteos.php", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ action: "eliminar", id: sorteoId })
+        }).then(function (r) {
+            if (r.error) { alert(r.error); return; }
+            alert("Sorteio excluído.");
+            location.href = "index.html";
+        });
+    };
+</script>
+</body>
+</html>

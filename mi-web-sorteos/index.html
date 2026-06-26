@@ -1,0 +1,261 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Entrar — Casa Dos Frios Sorteios</title>
+    <link rel="stylesheet" href="assets/app.css">
+    <style>
+        .auth-box { max-width: 480px; margin: 20px auto; }
+        .auth-tabs { display: flex; gap: 6px; margin-bottom: 20px; flex-wrap: wrap; }
+        .auth-tab {
+            flex: 1; min-width: 100px; padding: 10px 8px; background: #252525; border: 2px solid var(--gray-border);
+            border-radius: 8px; color: white; font-weight: bold; cursor: pointer; text-align: center; font-size: 0.82rem;
+        }
+        .auth-tab.active { border-color: var(--primary); background: #2a1500; color: var(--primary); }
+        .auth-panel { display: none; }
+        .auth-panel.active { display: block; }
+        .msg { font-size: 0.85rem; margin-top: 12px; text-align: center; display: none; }
+        .msg.erro { color: #ff6666; display: block; }
+        .msg.ok { color: #2ae056; display: block; }
+        .hint { font-size: 0.75rem; color: var(--text-muted); margin: -8px 0 12px; }
+        .link-btn {
+            background: none; border: none; color: var(--primary); cursor: pointer;
+            text-decoration: underline; font-size: 0.85rem; margin-top: 10px; width: 100%; text-align: center;
+        }
+    </style>
+</head>
+<body>
+
+<header class="site-header">
+    <h1 id="siteName">🔥 CASA DOS FRIOS SORTEIOS 🔥</h1>
+    <p id="siteSub">Entre ou crie sua conta para participar</p>
+</header>
+
+<main class="container auth-box">
+    <div class="main-box">
+        <div class="auth-tabs">
+            <button type="button" class="auth-tab active" data-tab="login">Iniciar Sessão</button>
+            <button type="button" class="auth-tab" data-tab="register">Criar Conta</button>
+            <button type="button" class="auth-tab" data-tab="reset">Restablecer</button>
+        </div>
+
+        <div id="panelLogin" class="auth-panel active">
+            <h2 style="color:var(--primary);text-align:center;margin-bottom:16px;font-size:1.1rem;">Iniciar sessão</h2>
+            <label>CPF (11 dígitos)</label>
+            <input type="text" id="loginCpf" maxlength="11" inputmode="numeric" placeholder="12345678901">
+            <label>Senha</label>
+            <input type="password" id="loginSenha" placeholder="Sua senha" autocomplete="current-password">
+            <button type="button" class="btn" id="btnLogin">Entrar</button>
+            <button type="button" class="link-btn" id="linkReset">Esqueci minha senha</button>
+            <p id="msgLogin" class="msg"></p>
+        </div>
+
+        <div id="panelRegister" class="auth-panel">
+            <h2 style="color:var(--primary);text-align:center;margin-bottom:16px;font-size:1.1rem;">Criar conta</h2>
+            <label>Nome e Sobrenome</label>
+            <input type="text" id="regNome" placeholder="Ex: João Silva">
+            <label>CPF (11 dígitos)</label>
+            <input type="text" id="regCpf" maxlength="11" inputmode="numeric" placeholder="12345678901">
+            <label>WhatsApp</label>
+            <input type="tel" id="regWhatsapp" placeholder="11999999999">
+            <label>E-mail</label>
+            <input type="email" id="regEmail" placeholder="seu@email.com">
+            <label>Criar senha</label>
+            <input type="password" id="regSenha" placeholder="Mínimo 6 caracteres" autocomplete="new-password">
+            <p class="hint">Use no mínimo 6 caracteres</p>
+            <label>Confirmar senha</label>
+            <input type="password" id="regSenha2" placeholder="Repita a senha" autocomplete="new-password">
+            <button type="button" class="btn btn-green" id="btnRegister">Criar Conta e Entrar</button>
+            <p id="msgRegister" class="msg"></p>
+        </div>
+
+        <div id="panelReset" class="auth-panel">
+            <h2 style="color:var(--primary);text-align:center;margin-bottom:16px;font-size:1.1rem;">Restablecer senha</h2>
+            <p class="hint" style="text-align:center;margin-bottom:14px;">
+                Informe seus dados cadastrados para definir uma nova senha
+            </p>
+            <label>CPF</label>
+            <input type="text" id="resetCpf" maxlength="11" inputmode="numeric" placeholder="12345678901">
+            <label>E-mail cadastrado</label>
+            <input type="email" id="resetEmail" placeholder="seu@email.com">
+            <label>WhatsApp cadastrado</label>
+            <input type="tel" id="resetWhatsapp" placeholder="11999999999">
+            <label>Nova senha</label>
+            <input type="password" id="resetSenha" placeholder="Mínimo 6 caracteres">
+            <label>Confirmar nova senha</label>
+            <input type="password" id="resetSenha2" placeholder="Repita a nova senha">
+            <button type="button" class="btn" id="btnReset">Restablecer Senha</button>
+            <button type="button" class="link-btn" id="linkLogin">Voltar ao login</button>
+            <p id="msgReset" class="msg"></p>
+        </div>
+    </div>
+</main>
+
+<footer class="site-footer">Pagamentos seguros via PIX · Sorteios transparentes</footer>
+
+<script>
+    var STORAGE_KEY = "cdf_cliente";
+
+    function saveCliente(c) {
+        sessionStorage.setItem(STORAGE_KEY, JSON.stringify(c));
+        location.href = "sorteos.html";
+    }
+
+    function showMsg(el, text, ok) {
+        el.textContent = text;
+        el.className = "msg " + (ok ? "ok" : "erro");
+    }
+
+    function showPanel(name) {
+        document.querySelectorAll(".auth-tab").forEach(function (x) {
+            x.classList.toggle("active", x.getAttribute("data-tab") === name);
+        });
+        document.querySelectorAll(".auth-panel").forEach(function (x) { x.classList.remove("active"); });
+        var map = { login: "panelLogin", register: "panelRegister", reset: "panelReset" };
+        document.getElementById(map[name]).classList.add("active");
+    }
+
+    if (sessionStorage.getItem(STORAGE_KEY)) {
+        location.replace("sorteos.html");
+    }
+
+    document.querySelectorAll(".auth-tab").forEach(function (tab) {
+        tab.onclick = function () { showPanel(tab.getAttribute("data-tab")); };
+    });
+
+    document.getElementById("linkReset").onclick = function () { showPanel("reset"); };
+    document.getElementById("linkLogin").onclick = function () { showPanel("login"); };
+
+    if (location.hash === "#cadastro") showPanel("register");
+    if (location.hash === "#restablecer") showPanel("reset");
+
+    fetch("api/sorteos.php").then(function (r) { return r.json(); }).then(function (d) {
+        if (d.site_name) {
+            document.getElementById("siteName").textContent = "🔥 " + d.site_name.toUpperCase() + " 🔥";
+            document.title = "Entrar — " + d.site_name;
+        }
+    }).catch(function () {});
+
+    function parseRes(r) {
+        return r.text().then(function (t) {
+            try { return { ok: r.ok, data: JSON.parse(t) }; }
+            catch (e) { return { ok: false, data: { error: t.substring(0, 120) } }; }
+        });
+    }
+
+    document.getElementById("btnLogin").onclick = function () {
+        var cpf = document.getElementById("loginCpf").value.replace(/\D/g, "");
+        var senha = document.getElementById("loginSenha").value;
+        var msg = document.getElementById("msgLogin");
+
+        if (cpf.length !== 11 || !senha) {
+            showMsg(msg, "Informe CPF e senha.", false);
+            return;
+        }
+
+        fetch("api/login-cliente.php", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ cpf: cpf, senha: senha })
+        })
+        .then(parseRes)
+        .then(function (res) {
+            if (!res.ok) throw new Error(res.data.error || "Erro ao entrar");
+            saveCliente(res.data.usuario);
+        })
+        .catch(function (e) { showMsg(msg, e.message, false); });
+    };
+
+    document.getElementById("btnRegister").onclick = function () {
+        var payload = {
+            nome: document.getElementById("regNome").value.trim(),
+            cpf: document.getElementById("regCpf").value.replace(/\D/g, ""),
+            whatsapp: document.getElementById("regWhatsapp").value.trim(),
+            email: document.getElementById("regEmail").value.trim(),
+            senha: document.getElementById("regSenha").value,
+            senha_confirm: document.getElementById("regSenha2").value
+        };
+        var msg = document.getElementById("msgRegister");
+
+        if (!payload.nome || !payload.cpf || !payload.whatsapp || !payload.email || !payload.senha) {
+            showMsg(msg, "Preencha todos os campos.", false);
+            return;
+        }
+        if (payload.cpf.length !== 11) {
+            showMsg(msg, "CPF deve ter 11 dígitos.", false);
+            return;
+        }
+        if (payload.senha.length < 6) {
+            showMsg(msg, "A senha deve ter no mínimo 6 caracteres.", false);
+            return;
+        }
+        if (payload.senha !== payload.senha_confirm) {
+            showMsg(msg, "As senhas não coincidem.", false);
+            return;
+        }
+
+        var btn = document.getElementById("btnRegister");
+        btn.disabled = true;
+        btn.textContent = "CRIANDO CONTA...";
+
+        fetch("api/registro.php", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(payload)
+        })
+        .then(parseRes)
+        .then(function (res) {
+            if (!res.ok) throw new Error(res.data.error || "Erro no cadastro");
+            saveCliente(res.data.usuario);
+        })
+        .catch(function (e) {
+            showMsg(msg, e.message, false);
+            btn.disabled = false;
+            btn.textContent = "Criar Conta e Entrar";
+        });
+    };
+
+    document.getElementById("btnReset").onclick = function () {
+        var payload = {
+            cpf: document.getElementById("resetCpf").value.replace(/\D/g, ""),
+            email: document.getElementById("resetEmail").value.trim(),
+            whatsapp: document.getElementById("resetWhatsapp").value.trim(),
+            senha: document.getElementById("resetSenha").value,
+            senha_confirm: document.getElementById("resetSenha2").value
+        };
+        var msg = document.getElementById("msgReset");
+
+        if (!payload.cpf || !payload.email || !payload.whatsapp || !payload.senha) {
+            showMsg(msg, "Preencha todos os campos.", false);
+            return;
+        }
+        if (payload.senha.length < 6) {
+            showMsg(msg, "A senha deve ter no mínimo 6 caracteres.", false);
+            return;
+        }
+        if (payload.senha !== payload.senha_confirm) {
+            showMsg(msg, "As senhas não coincidem.", false);
+            return;
+        }
+
+        fetch("api/restablecer-clave.php", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(payload)
+        })
+        .then(parseRes)
+        .then(function (res) {
+            if (!res.ok) throw new Error(res.data.error || "Erro ao restablecer");
+            showMsg(msg, "Senha atualizada! Entrando...", true);
+            setTimeout(function () { saveCliente(res.data.usuario); }, 800);
+        })
+        .catch(function (e) { showMsg(msg, e.message, false); });
+    };
+
+    document.getElementById("loginSenha").addEventListener("keydown", function (e) {
+        if (e.key === "Enter") document.getElementById("btnLogin").click();
+    });
+</script>
+</body>
+</html>

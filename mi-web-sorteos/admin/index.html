@@ -1,0 +1,766 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Admin — Sorteios</title>
+    <link rel="stylesheet" href="../assets/app.css">
+    <style>
+        .admin-wrap { max-width: 1100px; margin: 0 auto; padding: 20px; }
+        .login-box { max-width: 400px; margin: 60px auto; }
+        .stats-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 12px; margin-bottom: 24px; }
+        .stat-card { background: var(--card-bg); border: 1px solid var(--gray-border); border-radius: 10px; padding: 16px; text-align: center; }
+        .stat-card .num { font-size: 1.6rem; font-weight: 800; color: var(--primary); }
+        .stat-card .lbl { font-size: 0.75rem; color: var(--text-muted); }
+        .tabs { display: flex; gap: 8px; margin-bottom: 20px; flex-wrap: wrap; }
+        .tab { padding: 10px 18px; background: #252525; border: 1px solid var(--gray-border); border-radius: 8px; cursor: pointer; font-weight: bold; font-size: 0.85rem; }
+        .tab.active { background: var(--primary); color: white; border-color: var(--primary); }
+        .panel { display: none; }
+        .panel.active { display: block; }
+        table { width: 100%; border-collapse: collapse; font-size: 0.82rem; }
+        th, td { padding: 10px 8px; text-align: left; border-bottom: 1px solid var(--gray-border); }
+        th { color: var(--text-muted); font-weight: 600; }
+        .estado { padding: 3px 8px; border-radius: 4px; font-size: 0.72rem; font-weight: bold; }
+        .estado-activo { background: #1a3a1a; color: #2ae056; }
+        .estado-finalizado { background: #3a3a1a; color: #ffd700; }
+        .estado-pausado { background: #1a2a3a; color: #66aaff; }
+        .estado-processando { background: #3a2a00; color: #ffaa00; }
+        .estado-pago { background: #1a3a1a; color: #2ae056; }
+        .estado-cancelado { background: #3a1a1a; color: #ff6666; }
+        .admin-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; flex-wrap: wrap; gap: 10px; }
+        .form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+        .form-grid .full { grid-column: 1 / -1; }
+        .img-preview { max-width: 100%; max-height: 180px; border-radius: 8px; margin-top: 10px; display: none; border: 1px solid var(--gray-border); object-fit: cover; }
+        .check-row { display: flex; align-items: center; gap: 8px; margin-bottom: 14px; }
+        .check-row input { width: auto; margin: 0; }
+        .check-row label { margin: 0; font-size: 0.85rem; color: var(--text-light); }
+        @media (max-width: 700px) { .form-grid { grid-template-columns: 1fr; } table { font-size: 0.72rem; } }
+        .modal-overlay {
+            display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.85);
+            z-index: 100; align-items: flex-start; justify-content: center; padding: 20px; overflow-y: auto;
+        }
+        .modal-overlay.open { display: flex; }
+        .modal-box { max-width: 560px; width: 100%; margin: 20px auto; }
+        .btn-danger { background: #c62828; }
+        .btn-danger:hover { background: #a02020; }
+        .btn-row { display: flex; flex-wrap: wrap; gap: 6px; }
+        .btn-row .btn-sm { margin: 0; }
+    </style>
+</head>
+<body>
+
+<div id="loginView" class="admin-wrap login-box">
+    <div class="main-box">
+        <h2 style="color:var(--primary);text-align:center;margin-bottom:8px;">🔐 Painel Admin</h2>
+        <p style="text-align:center;color:var(--text-muted);font-size:0.85rem;margin-bottom:20px;">Acesso restrito ao proprietário</p>
+        <label>Senha</label>
+        <input type="password" id="loginPass" placeholder="Senha de administrador">
+        <button type="button" class="btn" id="btnLogin">Entrar</button>
+        <p style="font-size:0.75rem;color:var(--text-muted);margin-top:12px;text-align:center;">Senha padrão: <code>admin123</code> (altere depois)</p>
+    </div>
+</div>
+
+<div id="adminView" class="admin-wrap" style="display:none;">
+    <div class="admin-header">
+        <div>
+            <h2 style="color:var(--primary);">Painel de Controle</h2>
+            <p style="color:var(--text-muted);font-size:0.85rem;">Gerencie sorteios, pedidos e pagamentos</p>
+        </div>
+        <div style="display:flex;gap:8px;">
+            <a href="../index.html" class="btn btn-sm btn-outline" style="width:auto;">Ver Site</a>
+            <button type="button" class="btn btn-sm btn-secondary" id="btnLogout" style="width:auto;">Sair</button>
+        </div>
+    </div>
+
+    <div class="stats-grid" id="statsGrid"></div>
+
+    <div class="tabs">
+        <div class="tab active" data-tab="sorteos">Sorteios</div>
+        <div class="tab" data-tab="pedidos">Pedidos / Pagamentos</div>
+        <div class="tab" data-tab="usuarios">Usuários Cadastrados</div>
+        <div class="tab" data-tab="config">⚙ Configurações</div>
+        <div class="tab" data-tab="criar">+ Novo Sorteio</div>
+    </div>
+
+    <div id="panelSorteos" class="panel active main-box">
+        <h3 style="margin-bottom:16px;">Meus Sorteios</h3>
+        <div style="overflow-x:auto;" id="tablaSorteos"></div>
+    </div>
+
+    <div id="panelPedidos" class="panel main-box">
+        <h3 style="margin-bottom:16px;">Pedidos e Clientes</h3>
+        <label>Filtrar por sorteio</label>
+        <select id="filtroSorteo" style="margin-bottom:16px;"></select>
+        <div style="overflow-x:auto;" id="tablaPedidos"></div>
+    </div>
+
+    <div id="panelUsuarios" class="panel main-box">
+        <h3 style="margin-bottom:16px;">Usuários Registrados</h3>
+        <div style="overflow-x:auto;" id="tablaUsuarios"></div>
+    </div>
+
+    <div id="panelConfig" class="panel main-box">
+        <h3 style="margin-bottom:8px;">Mercado Pago — PIX Real</h3>
+        <p style="color:var(--text-muted);font-size:0.85rem;margin-bottom:20px;">
+            Cole seu <strong>Access Token</strong> de produção ou teste do
+            <a href="https://www.mercadopago.com.br/developers/panel/app" target="_blank" rel="noopener" style="color:var(--primary);">Painel Mercado Pago</a>.
+            Com o token configurado, os pagamentos PIX são gerados e confirmados automaticamente.
+        </p>
+        <div style="margin-bottom:16px;padding:14px;background:#1a1a1a;border-radius:8px;font-size:0.82rem;">
+            <strong style="color:#ffd700;">⚠ Importante — dois tipos de token:</strong><br><br>
+            <strong>TEST-...</strong> → Credenciais de <em>teste</em>. Use no <strong>localhost</strong> para simular PIX sem cobrar dinheiro real.<br><br>
+            <strong>APP_USR-...</strong> → Credenciais de <em>produção</em>. Só funciona com site publicado em <strong>HTTPS</strong> (domínio público). Não funciona em localhost.
+        </div>
+        <div id="mpStatus" style="padding:12px;border-radius:8px;margin-bottom:16px;font-size:0.85rem;"></div>
+        <div id="mpWarning" style="display:none;padding:12px;border-radius:8px;margin-bottom:16px;font-size:0.85rem;background:#3a2a00;color:#ffaa00;"></div>
+        <label>URL do site <span style="color:var(--text-muted);font-weight:normal;">(para webhook — use HTTPS em produção)</span></label>
+        <input type="url" id="cfgSiteUrl" placeholder="http://localhost/mi-web-sorteos">
+        <p style="font-size:0.75rem;color:var(--text-muted);margin:6px 0 14px;">Detectada: <code id="cfgDetectedUrl">—</code></p>
+
+        <label>🧪 Token de TESTE <span style="color:var(--text-muted);font-weight:normal;">(Access token — começa com TEST-)</span></label>
+        <input type="password" id="cfgMpTestToken" placeholder="TEST-1234567890-041234-xxxxxxxx..." autocomplete="off">
+        <p id="cfgTestSaved" style="font-size:0.75rem;color:var(--text-muted);margin:4px 0 14px;"></p>
+        <div style="margin-bottom:14px;padding:12px;background:#1a2a3a;border-radius:8px;font-size:0.78rem;color:#aaccee;line-height:1.5;">
+            <strong style="color:#66aaff;">Onde copiar (não confunda):</strong><br>
+            ✓ <strong>Access token</strong> em Credenciais de teste → começa com <code>TEST-</code><br>
+            ✗ <strong>TESTUSER...</strong> = usuário de teste (comprador/vendedor) — <em>não serve aqui</em><br>
+            ✗ <strong>Public Key</strong> — também não é o Access token
+        </div>
+
+        <label>💰 Token de PRODUÇÃO <span style="color:var(--text-muted);font-weight:normal;">(APP_USR-... — só com HTTPS público)</span></label>
+        <input type="password" id="cfgMpProdToken" placeholder="Cole o Access Token de Credenciais de produção" autocomplete="off">
+        <p id="cfgProdSaved" style="font-size:0.75rem;color:var(--text-muted);margin:4px 0 14px;"></p>
+
+        <p style="font-size:0.75rem;color:var(--text-muted);margin:6px 0 14px;">Webhook: <code id="cfgWebhookUrl">—</code></p>
+        <p id="msgConfig" style="display:none;font-size:0.85rem;margin-top:10px;text-align:center;"></p>
+        <button type="button" class="btn btn-green" id="btnSaveConfig" style="margin-top:8px;">Salvar Configurações</button>
+        <div style="margin-top:24px;padding:14px;background:#1a1a1a;border-radius:8px;font-size:0.8rem;color:var(--text-muted);">
+            <strong style="color:var(--text-light);">Como funciona:</strong><br>
+            1. <a href="https://www.mercadopago.com.br/developers/panel/app" target="_blank" rel="noopener" style="color:var(--primary);">Mercado Pago Developers</a> → sua aplicação<br>
+            2. Menu lateral: <strong>Credenciais de teste</strong><br>
+            3. Copie só o campo <strong>Access token</strong> (TEST-... longo)<br>
+            4. Cole no campo "Token de TESTE" acima e salve
+        </div>
+    </div>
+
+    <div id="panelCriar" class="panel main-box">
+        <h3 style="margin-bottom:16px;">Criar Novo Sorteio</h3>
+        <div class="form-grid">
+            <div class="full"><label>Título</label><input type="text" id="fTitulo" placeholder="Ex: Sorteio iPhone 16"></div>
+            <div class="full"><label>Descrição</label><textarea id="fDesc" rows="2" placeholder="Descreva o sorteio..."></textarea></div>
+            <div><label>Prêmio</label><input type="text" id="fPremio" placeholder="Ex: iPhone 16 Pro"></div>
+            <div>
+                <label>Data do sorteio <span style="color:var(--text-muted);font-weight:normal;">(opcional)</span></label>
+                <input type="date" id="fFecha">
+                <div class="check-row">
+                    <input type="checkbox" id="fSinFecha">
+                    <label for="fSinFecha">Sorteio sem data definida</label>
+                </div>
+            </div>
+            <div><label>Preço por cota (R$)</label><input type="number" id="fPrecio" value="10" min="1" step="0.01"></div>
+            <div><label>Total de cotas</label><input type="number" id="fTotal" value="10000" min="1"></div>
+            <div class="full">
+                <label>Imagem do sorteio <span style="color:var(--text-muted);font-weight:normal;">(opcional — JPG, PNG, WEBP, GIF · máx. 5 MB)</span></label>
+                <input type="file" id="fImagen" accept="image/jpeg,image/png,image/webp,image/gif">
+                <img id="fPreview" class="img-preview" alt="Prévia">
+            </div>
+        </div>
+        <p id="msgCrear" style="display:none;font-size:0.85rem;margin-top:10px;text-align:center;"></p>
+        <button type="button" class="btn btn-green" id="btnCrear" style="margin-top:16px;">Criar Sorteio</button>
+    </div>
+</div>
+
+<!-- Modal editar sorteio -->
+<div id="modalEditar" class="modal-overlay">
+    <div class="main-box modal-box">
+        <h3 style="color:var(--primary);margin-bottom:16px;">Editar Sorteio</h3>
+        <input type="hidden" id="editId">
+        <div class="form-grid">
+            <div class="full"><label>Título</label><input type="text" id="editTitulo"></div>
+            <div class="full"><label>Descrição</label><textarea id="editDesc" rows="2"></textarea></div>
+            <div><label>Prêmio</label><input type="text" id="editPremio"></div>
+            <div>
+                <label>Estado</label>
+                <select id="editEstado">
+                    <option value="activo">Activo</option>
+                    <option value="pausado">Pausado</option>
+                    <option value="finalizado">Finalizado</option>
+                </select>
+            </div>
+            <div>
+                <label>Data do sorteio <span style="color:var(--text-muted);font-weight:normal;">(opcional)</span></label>
+                <input type="date" id="editFecha">
+                <div class="check-row">
+                    <input type="checkbox" id="editSinFecha">
+                    <label for="editSinFecha">Sem data definida</label>
+                </div>
+            </div>
+            <div><label>Preço por cota (R$)</label><input type="number" id="editPrecio" min="1" step="0.01"></div>
+            <div><label>Total de cotas</label><input type="number" id="editTotal" min="1"></div>
+            <div class="full">
+                <label>Imagem atual</label>
+                <img id="editImgActual" class="img-preview" style="display:none;max-height:120px;" alt="">
+                <label style="margin-top:10px;">Nova imagem <span style="color:var(--text-muted);font-weight:normal;">(opcional)</span></label>
+                <input type="file" id="editImagen" accept="image/jpeg,image/png,image/webp,image/gif">
+                <img id="editPreview" class="img-preview" alt="">
+            </div>
+        </div>
+        <p id="msgEditar" style="display:none;font-size:0.85rem;margin-top:10px;text-align:center;"></p>
+        <button type="button" class="btn btn-green" id="btnGuardarEdit" style="margin-top:14px;">Salvar Alterações</button>
+        <button type="button" class="btn btn-secondary" id="btnCancelEdit" style="margin-top:10px;">Cancelar</button>
+    </div>
+</div>
+
+<script>
+    var sorteosList = [];
+
+    function api(path, opts) {
+        opts = opts || {};
+        opts.credentials = "include";
+        return fetch("../api/admin/" + path, opts).then(function (r) {
+            return r.text().then(function (t) {
+                try { return JSON.parse(t); }
+                catch (e) { return { error: "Erro PHP: " + t.substring(0, 120) }; }
+            });
+        });
+    }
+
+    function showTab(name) {
+        var panelMap = { sorteos: "panelSorteos", pedidos: "panelPedidos", usuarios: "panelUsuarios", config: "panelConfig", criar: "panelCriar" };
+        document.querySelectorAll(".tab").forEach(function (t) {
+            t.classList.toggle("active", t.getAttribute("data-tab") === name);
+        });
+        document.querySelectorAll(".panel").forEach(function (p) { p.classList.remove("active"); });
+        document.getElementById(panelMap[name]).classList.add("active");
+        if (name === "pedidos") loadPedidos();
+        if (name === "usuarios") loadUsuarios();
+        if (name === "config") loadConfig();
+    }
+
+    function loadConfig() {
+        api("config.php").then(function (d) {
+            if (d.error) { alert(d.error); return; }
+            document.getElementById("cfgSiteUrl").value = d.site_url || d.detected_site_url || "";
+            document.getElementById("cfgDetectedUrl").textContent = d.detected_site_url || "—";
+            var wh = d.webhook_url;
+            document.getElementById("cfgWebhookUrl").textContent = wh || (d.webhook_localhost
+                ? "Desativado em localhost (usa verificação na tela)"
+                : "—");
+            document.getElementById("cfgMpTestToken").value = "";
+            document.getElementById("cfgMpProdToken").value = "";
+            document.getElementById("cfgTestSaved").textContent = d.test_token_saved
+                ? "✓ Teste salvo: " + d.test_token_preview + " (deixe em branco para manter)"
+                : "Nenhum token de teste salvo — obrigatório para localhost";
+            document.getElementById("cfgProdSaved").textContent = d.prod_token_saved
+                ? "✓ Produção salvo: " + d.prod_token_preview + " (usado só quando publicar com HTTPS)"
+                : "Nenhum token de produção salvo";
+            var st = document.getElementById("mpStatus");
+            var warn = document.getElementById("mpWarning");
+            if (d.is_localhost) {
+                if (d.test_token_saved) {
+                    st.style.background = "#1a2a3a";
+                    st.style.color = "#66aaff";
+                    st.innerHTML = "🧪 Localhost — usando token TESTE (" + d.active_token_preview + ")";
+                } else {
+                    st.style.background = "#3a2a00";
+                    st.style.color = "#ffaa00";
+                    st.innerHTML = "⚠ Localhost — falta token TEST- no campo de teste";
+                }
+            } else if (d.prod_token_saved) {
+                st.style.background = "#1a3a1a";
+                st.style.color = "#2ae056";
+                st.innerHTML = "✓ Produção — token APP_USR ativo";
+            } else if (d.test_token_saved) {
+                st.style.background = "#1a2a3a";
+                st.style.color = "#66aaff";
+                st.innerHTML = "🧪 Apenas token de teste configurado";
+            } else {
+                st.style.background = "#3a2a00";
+                st.style.color = "#ffaa00";
+                st.innerHTML = "⚠ Modo DEMO — configure os tokens abaixo";
+            }
+            if (d.environment_warning) {
+                warn.style.display = "block";
+                warn.textContent = "⚠ " + d.environment_warning;
+            } else {
+                warn.style.display = "none";
+            }
+        });
+    }
+
+    document.getElementById("btnSaveConfig").onclick = function () {
+        var msg = document.getElementById("msgConfig");
+        msg.style.display = "none";
+        var btn = document.getElementById("btnSaveConfig");
+        btn.disabled = true;
+        var payload = { site_url: document.getElementById("cfgSiteUrl").value.trim() };
+        var testTok = document.getElementById("cfgMpTestToken").value.trim();
+        var prodTok = document.getElementById("cfgMpProdToken").value.trim();
+        if (testTok) payload.mercadopago_test_token = testTok;
+        if (prodTok) payload.mercadopago_prod_token = prodTok;
+        api("config.php", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(payload)
+        }).then(function (r) {
+            if (r.error) throw new Error(r.error);
+            msg.textContent = r.message || "Salvo!";
+            msg.style.color = "#2ae056";
+            msg.style.display = "block";
+            loadConfig();
+        }).catch(function (e) {
+            msg.textContent = e.message;
+            msg.style.color = "#ff6666";
+            msg.style.display = "block";
+        }).finally(function () { btn.disabled = false; });
+    };
+
+    function loadDashboard() {
+        api("dashboard.php").then(function (d) {
+            if (d.error) { alert(d.error); return; }
+            var s = d.stats || {};
+            document.getElementById("statsGrid").innerHTML =
+                stat("Sorteios", s.sorteos || 0) +
+                stat("Usuários", s.usuarios || 0) +
+                stat("Pedidos", s.pedidos || 0) +
+                stat("Pagos", s.pagos || 0) +
+                stat("Aguardando", s.processando || 0) +
+                stat("Receita", "R$ " + (s.receita || 0).toFixed(0));
+            sorteosList = d.sorteos || [];
+            renderSorteos();
+            renderFiltro();
+            loadUsuarios();
+        });
+    }
+
+    window.verSorteo = function (id) {
+        location.href = "sorteo.html?id=" + encodeURIComponent(id);
+    };
+
+    window.irSortear = function (id) {
+        location.href = "sorteo.html?id=" + encodeURIComponent(id) + "#sortear";
+    };
+
+    window.finalizar = function (id) {
+        irSortear(id);
+    };
+
+    function stat(lbl, val) {
+        return '<div class="stat-card"><div class="num">' + val + '</div><div class="lbl">' + lbl + '</div></div>';
+    }
+
+    function renderSorteos() {
+        if (!sorteosList.length) {
+            document.getElementById("tablaSorteos").innerHTML = '<p style="color:var(--text-muted);">Nenhum sorteio criado.</p>';
+            return;
+        }
+        var html = '<table><thead><tr><th>Img</th><th>Título</th><th>Data</th><th>Estado</th><th>Vendidas</th><th>%</th><th>Ganhador</th><th>Ações</th></tr></thead><tbody>';
+        sorteosList.forEach(function (s) {
+            var imgCell = s.imagen
+                ? '<img src="../' + esc(s.imagen) + '" alt="" style="width:48px;height:48px;object-fit:cover;border-radius:6px;">'
+                : '—';
+            var fechaCell = s.fecha_sorteo ? s.fecha_sorteo.split("-").reverse().join("/") : "A definir";
+            html += '<tr>' +
+                '<td>' + imgCell + '</td>' +
+                '<td><strong>' + esc(s.titulo) + '</strong><br><small style="color:#999;">' + esc(s.premio) + '</small></td>' +
+                '<td>' + fechaCell + '</td>' +
+                '<td><span class="estado estado-' + s.estado + '">' + s.estado + '</span></td>' +
+                '<td>' + (s.vendidas || 0) + ' / ' + s.total_cotas + '</td>' +
+                '<td>' + (s.porcentaje || 0) + '%</td>' +
+                '<td>' + (s.numero_ganador || "—") + '</td>' +
+                '<td><div class="btn-row">' +
+                '<button class="btn btn-sm btn-outline" onclick="verSorteo(\'' + s.id + '\')">Ver</button>' +
+                '<button class="btn btn-sm btn-secondary" onclick="abrirEditar(\'' + s.id + '\')">Editar</button>' +
+                (s.estado === "activo"
+                    ? '<button class="btn btn-sm" onclick="irSortear(\'' + s.id + '\')">🎲 Sortear</button>'
+                    : "") +
+                '<button class="btn btn-sm btn-secondary" onclick="pausar(\'' + s.id + '\',\'' + (s.estado === "activo" ? "pausado" : "activo") + '\')">' +
+                (s.estado === "activo" ? "Pausar" : "Ativar") + '</button>' +
+                '<button class="btn btn-sm btn-danger" onclick="eliminarSorteo(\'' + s.id + '\')">Excluir</button>' +
+                '</div></td></tr>';
+        });
+        html += '</tbody></table>';
+        document.getElementById("tablaSorteos").innerHTML = html;
+    }
+
+    function renderFiltro() {
+        var sel = document.getElementById("filtroSorteo");
+        sel.innerHTML = '<option value="">Todos os sorteios</option>' +
+            sorteosList.map(function (s) {
+                return '<option value="' + s.id + '">' + esc(s.titulo) + '</option>';
+            }).join("");
+    }
+
+    function loadUsuarios() {
+        api("usuarios.php").then(function (users) {
+            if (!Array.isArray(users)) {
+                document.getElementById("tablaUsuarios").innerHTML =
+                    '<p style="color:#ff6666;">' + esc(users.error || "Erro ao carregar usuários") + '</p>';
+                return;
+            }
+            if (!users.length) {
+                document.getElementById("tablaUsuarios").innerHTML =
+                    '<p style="color:var(--text-muted);">Nenhum usuário cadastrado ainda. Os cadastros aparecem aqui quando alguém cria conta no site.</p>';
+                return;
+            }
+            var html = '<table><thead><tr><th>Data</th><th>Nome</th><th>CPF</th><th>E-mail</th><th>WhatsApp</th></tr></thead><tbody>';
+            users.forEach(function (u) {
+                html += '<tr><td>' + formatDt(u.created_at) + '</td><td><strong>' + esc(u.nome) + '</strong></td><td>' + u.cpf + '</td><td>' + esc(u.email) + '</td><td>' + esc(u.whatsapp) + '</td></tr>';
+            });
+            html += '</tbody></table>';
+            document.getElementById("tablaUsuarios").innerHTML = html;
+        });
+    }
+
+    function loadPedidos() {
+        var sid = document.getElementById("filtroSorteo").value;
+        var url = "pedidos.php" + (sid ? "?sorteo_id=" + encodeURIComponent(sid) : "");
+        fetch("../api/admin/" + url, { credentials: "include" }).then(function (r) { return r.json(); }).then(function (pedidos) {
+            if (!pedidos.length) {
+                document.getElementById("tablaPedidos").innerHTML = '<p style="color:var(--text-muted);">Nenhum pedido ainda.</p>';
+                return;
+            }
+            var html = '<table><thead><tr><th>Data</th><th>Cliente</th><th>Contato</th><th>Números</th><th>Valor</th><th>Estado</th><th>Ações</th></tr></thead><tbody>';
+            pedidos.forEach(function (p) {
+                html += '<tr>' +
+                    '<td style="white-space:nowrap;">' + formatDt(p.created_at) + '</td>' +
+                    '<td><strong>' + esc(p.nome) + '</strong><br><small>CPF: ' + p.cpf + '</small></td>' +
+                    '<td><small>' + esc(p.email) + '<br>' + esc(p.whatsapp) + '</small></td>' +
+                    '<td>' + (p.numeros || []).join(", ") + '</td>' +
+                    '<td>R$ ' + p.valor + '</td>' +
+                    '<td><span class="estado estado-' + p.estado + '">' + p.estado + '</span></td>' +
+                    '<td>' +
+                    (p.estado === "processando"
+                        ? '<button class="btn btn-sm btn-green" onclick="confirmar(\'' + p.sorteo_id + '\',\'' + p.id + '\')">✓ Pago</button> '
+                        : "") +
+                    (p.estado !== "cancelado"
+                        ? '<button class="btn btn-sm btn-secondary" onclick="cancelar(\'' + p.sorteo_id + '\',\'' + p.id + '\')">✗</button>'
+                        : "") +
+                    '</td></tr>';
+            });
+            html += '</tbody></table>';
+            document.getElementById("tablaPedidos").innerHTML = html;
+        });
+    }
+
+    window.finalizar = function (id) {
+        document.getElementById("finId").value = id;
+        document.getElementById("finGanador").value = "";
+        document.getElementById("modalFinalizar").style.display = "flex";
+    };
+
+    window.pausar = function (id, estado) {
+        api("sorteos.php", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ action: "editar", id: id, estado: estado })
+        }).then(function () { loadDashboard(); });
+    };
+
+    window.confirmar = function (sid, pid) {
+        if (!confirm("Confirmar pagamento deste pedido?")) return;
+        api("pedidos.php", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ action: "confirmar", sorteo_id: sid, pedido_id: pid })
+        }).then(function () { loadDashboard(); loadPedidos(); });
+    };
+
+    window.cancelar = function (sid, pid) {
+        if (!confirm("Cancelar pedido e liberar números?")) return;
+        api("pedidos.php", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ action: "cancelar", sorteo_id: sid, pedido_id: pid })
+        }).then(function () { loadDashboard(); loadPedidos(); });
+    };
+
+    function esc(t) { var d = document.createElement("div"); d.textContent = t || ""; return d.innerHTML; }
+    function formatDt(iso) {
+        if (!iso) return "";
+        var d = new Date(iso);
+        return d.toLocaleDateString("pt-BR") + " " + d.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
+    }
+
+    document.getElementById("btnLogin").onclick = function () {
+        var pass = document.getElementById("loginPass").value;
+        if (!pass) { alert("Digite a senha"); return; }
+        api("login.php", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ password: pass })
+        }).then(function (r) {
+            if (r.error) { alert(r.error); return; }
+            if (!r.ok) { alert("Erro ao iniciar sessão"); return; }
+            document.getElementById("loginView").style.display = "none";
+            document.getElementById("adminView").style.display = "block";
+            loadDashboard();
+        }).catch(function () { alert("Não foi possível conectar ao servidor. Verifique o Apache."); });
+    };
+
+    document.getElementById("loginPass").addEventListener("keydown", function (e) {
+        if (e.key === "Enter") document.getElementById("btnLogin").click();
+    });
+
+    document.getElementById("btnLogout").onclick = function () {
+        api("logout.php", { method: "POST" }).then(function () { location.reload(); });
+    };
+
+    document.querySelectorAll(".tab").forEach(function (t) {
+        t.onclick = function () { showTab(t.getAttribute("data-tab")); };
+    });
+
+    document.getElementById("filtroSorteo").onchange = loadPedidos;
+
+    document.getElementById("fSinFecha").onchange = function () {
+        document.getElementById("fFecha").disabled = this.checked;
+        if (this.checked) document.getElementById("fFecha").value = "";
+    };
+
+    document.getElementById("fImagen").onchange = function () {
+        var preview = document.getElementById("fPreview");
+        if (this.files && this.files[0]) {
+            preview.src = URL.createObjectURL(this.files[0]);
+            preview.style.display = "block";
+        } else {
+            preview.style.display = "none";
+        }
+    };
+
+    document.getElementById("btnCrear").onclick = function () {
+        var titulo = document.getElementById("fTitulo").value.trim();
+        var msg = document.getElementById("msgCrear");
+        msg.style.display = "none";
+
+        if (!titulo) {
+            msg.textContent = "Informe o título do sorteio.";
+            msg.style.color = "#ff6666";
+            msg.style.display = "block";
+            return;
+        }
+
+        var btn = document.getElementById("btnCrear");
+        btn.disabled = true;
+        btn.textContent = "SALVANDO...";
+
+        function criarSorteo(imagenUrl) {
+            var sinFecha = document.getElementById("fSinFecha").checked;
+            var fechaVal = document.getElementById("fFecha").value;
+
+            return api("sorteos.php", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                    action: "crear",
+                    titulo: titulo,
+                    descricao: document.getElementById("fDesc").value,
+                    premio: document.getElementById("fPremio").value,
+                    fecha_sorteo: sinFecha ? null : (fechaVal || null),
+                    precio_cota: parseFloat(document.getElementById("fPrecio").value) || 10,
+                    total_cotas: parseInt(document.getElementById("fTotal").value, 10) || 10000,
+                    imagen: imagenUrl || ""
+                })
+            });
+        }
+
+        function finalizarOk() {
+            alert("Sorteio criado com sucesso!");
+            document.getElementById("fTitulo").value = "";
+            document.getElementById("fDesc").value = "";
+            document.getElementById("fPremio").value = "";
+            document.getElementById("fFecha").value = "";
+            document.getElementById("fSinFecha").checked = false;
+            document.getElementById("fFecha").disabled = false;
+            document.getElementById("fImagen").value = "";
+            document.getElementById("fPreview").style.display = "none";
+            loadDashboard();
+            showTab("sorteos");
+        }
+
+        var fileInput = document.getElementById("fImagen");
+        if (fileInput.files && fileInput.files[0]) {
+            var fd = new FormData();
+            fd.append("imagen", fileInput.files[0]);
+            fetch("../api/admin/upload.php", { method: "POST", credentials: "include", body: fd })
+                .then(function (r) { return r.text().then(function (t) {
+                    try { return JSON.parse(t); } catch (e) { return { error: t.substring(0, 120) }; }
+                }); })
+                .then(function (up) {
+                    if (up.error) throw new Error(up.error);
+                    return criarSorteo(up.url);
+                })
+                .then(function (r) {
+                    if (r.error || !r.ok) throw new Error(r.error || "Erro ao criar sorteio");
+                    finalizarOk();
+                })
+                .catch(function (e) {
+                    msg.textContent = e.message || "Erro ao salvar";
+                    msg.style.color = "#ff6666";
+                    msg.style.display = "block";
+                })
+                .finally(function () {
+                    btn.disabled = false;
+                    btn.textContent = "Criar Sorteio";
+                });
+        } else {
+            criarSorteo("")
+                .then(function (r) {
+                    if (r.error || !r.ok) throw new Error(r.error || "Erro ao criar sorteio");
+                    finalizarOk();
+                })
+                .catch(function (e) {
+                    msg.textContent = e.message || "Erro ao salvar";
+                    msg.style.color = "#ff6666";
+                    msg.style.display = "block";
+                })
+                .finally(function () {
+                    btn.disabled = false;
+                    btn.textContent = "Criar Sorteio";
+                });
+        }
+    };
+
+    window.abrirEditar = function (id) {
+        var s = sorteosList.find(function (x) { return x.id === id; });
+        if (!s) return;
+
+        document.getElementById("editId").value = s.id;
+        document.getElementById("editTitulo").value = s.titulo || "";
+        document.getElementById("editDesc").value = s.descricao || "";
+        document.getElementById("editPremio").value = s.premio || "";
+        document.getElementById("editPrecio").value = s.precio_cota || 10;
+        document.getElementById("editTotal").value = s.total_cotas || 1000;
+        document.getElementById("editEstado").value = s.estado || "activo";
+
+        var sinFecha = !s.fecha_sorteo;
+        document.getElementById("editSinFecha").checked = sinFecha;
+        document.getElementById("editFecha").disabled = sinFecha;
+        document.getElementById("editFecha").value = s.fecha_sorteo || "";
+
+        var imgActual = document.getElementById("editImgActual");
+        if (s.imagen) {
+            imgActual.src = "../" + s.imagen;
+            imgActual.style.display = "block";
+        } else {
+            imgActual.style.display = "none";
+        }
+
+        document.getElementById("editImagen").value = "";
+        document.getElementById("editPreview").style.display = "none";
+        document.getElementById("msgEditar").style.display = "none";
+        document.getElementById("modalEditar").classList.add("open");
+    };
+
+    window.eliminarSorteo = function (id) {
+        var s = sorteosList.find(function (x) { return x.id === id; });
+        var nome = s ? s.titulo : id;
+        if (!confirm("Excluir o sorteio \"" + nome + "\"?\n\nEsta ação não pode ser desfeita. Sorteios com cotas pagas não podem ser excluídos.")) {
+            return;
+        }
+        api("sorteos.php", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ action: "eliminar", id: id })
+        }).then(function (r) {
+            if (r.error) { alert(r.error); return; }
+            alert("Sorteio excluído.");
+            loadDashboard();
+        });
+    };
+
+    document.getElementById("btnCancelEdit").onclick = function () {
+        document.getElementById("modalEditar").classList.remove("open");
+    };
+
+    document.getElementById("editSinFecha").onchange = function () {
+        document.getElementById("editFecha").disabled = this.checked;
+        if (this.checked) document.getElementById("editFecha").value = "";
+    };
+
+    document.getElementById("editImagen").onchange = function () {
+        var preview = document.getElementById("editPreview");
+        if (this.files && this.files[0]) {
+            preview.src = URL.createObjectURL(this.files[0]);
+            preview.style.display = "block";
+        } else {
+            preview.style.display = "none";
+        }
+    };
+
+    document.getElementById("btnGuardarEdit").onclick = function () {
+        var id = document.getElementById("editId").value;
+        var msg = document.getElementById("msgEditar");
+        msg.style.display = "none";
+
+        var payload = {
+            action: "editar",
+            id: id,
+            titulo: document.getElementById("editTitulo").value.trim(),
+            descricao: document.getElementById("editDesc").value,
+            premio: document.getElementById("editPremio").value,
+            estado: document.getElementById("editEstado").value,
+            fecha_sorteo: document.getElementById("editSinFecha").checked ? null : (document.getElementById("editFecha").value || null),
+            precio_cota: parseFloat(document.getElementById("editPrecio").value),
+            total_cotas: parseInt(document.getElementById("editTotal").value, 10)
+        };
+
+        var s = sorteosList.find(function (x) { return x.id === id; });
+        if (s && s.imagen) payload.imagen = s.imagen;
+
+        function salvar(imagenUrl) {
+            if (imagenUrl) payload.imagen = imagenUrl;
+            return api("sorteos.php", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify(payload)
+            });
+        }
+
+        var btn = document.getElementById("btnGuardarEdit");
+        btn.disabled = true;
+
+        var fileInput = document.getElementById("editImagen");
+        var chain = Promise.resolve();
+        if (fileInput.files && fileInput.files[0]) {
+            var fd = new FormData();
+            fd.append("imagen", fileInput.files[0]);
+            chain = fetch("../api/admin/upload.php", { method: "POST", credentials: "include", body: fd })
+                .then(function (r) { return r.json(); })
+                .then(function (up) {
+                    if (up.error) throw new Error(up.error);
+                    return up.url;
+                });
+        }
+
+        chain
+            .then(function (url) { return salvar(url); })
+            .then(function (r) {
+                if (r.error || !r.ok) throw new Error(r.error || "Erro ao salvar");
+                document.getElementById("modalEditar").classList.remove("open");
+                alert("Sorteio atualizado!");
+                loadDashboard();
+            })
+            .catch(function (e) {
+                msg.textContent = e.message;
+                msg.style.color = "#ff6666";
+                msg.style.display = "block";
+            })
+            .finally(function () { btn.disabled = false; });
+    };
+
+    var params = new URLSearchParams(location.search);
+    var editParam = params.get("edit");
+
+    api("check.php").then(function (r) {
+        if (r.logged_in) {
+            document.getElementById("loginView").style.display = "none";
+            document.getElementById("adminView").style.display = "block";
+            loadDashboard();
+            if (editParam) {
+                setTimeout(function () { abrirEditar(editParam); }, 400);
+            }
+        }
+    });
+</script>
+</body>
+</html>
